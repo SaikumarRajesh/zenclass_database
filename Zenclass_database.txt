@@ -1,0 +1,252 @@
+Database for  Zenclass program:
+
+1.users:
+user_id(pk),
+username,
+gender
+
+2.Codekata:
+codekata_id(pk),
+user_id(fk),
+codekata_title,
+codekata_status
+
+3.Attendence:
+attendence_id(pk),
+user_id(fk)
+attendence_date,
+attendence
+
+4.Topics:
+topic_id(pk),
+topic:,
+topic_date
+
+5.Tasks:
+task_id(pk),
+task,
+task_date,
+user_id(fk),
+taskstatus
+
+6.companydrives:
+drive_id(pk),
+companyname,
+drive_date,
+drivestatus
+
+7.drive_attendence:
+driveattendence_id(pk),
+user_id(fk),
+driveattendence
+
+8.mentors:
+mentor_id(pk),
+mentorname,
+mentees
+
+
+----------------------------------------------------------------------------------
+1.Find all the topics and tasks which are thought in the month of October.
+
+db.Topics.aggregate
+([
+{
+  $match:{
+     date:{
+       $gte:"2020-10-01", $lt:"2020-11-01"
+          }
+         }
+},
+{
+$lookup:{
+     from:"Tasks", 
+     localField:"topic_id", 
+     foreignField:"task_id", 
+     as:"Tasks"}
+}
+]);
+
+2.Find all the company drives which appeared between 15 oct-2020 and 31-oct-2020.
+
+db.companydrives.aggregate([
+  {
+    $match: {
+      drivedate: {
+        $gt: "2020-10-15",
+        $lt: "2020-10-31"
+      }
+    }
+  },
+  {
+    $group: {
+      _id: null,
+      company_name:"$companyname"
+    }
+  }
+]);
+
+3.Find all the company drives and students who are appeared for the placement.
+
+db.companydrives.aggregate([
+    {
+        $lookup: {
+            from: "drive_attendence",
+            localField: "drive_id",
+            foreignField: "drive_id",
+            as: "drive_attendance"
+        }
+    },
+    {
+        $unwind: "$drive_attendance"
+    },
+    {
+        $lookup: {
+            from: "users",
+            localField: "drive_attendance.user_id",
+            foreignField: "user_id",
+            as: "student"
+        }
+    },
+    {
+        $unwind: "$student"
+    },
+    {
+        $project: {
+            _id: 0,
+            companyname: 1,
+            username: "$student.username"
+        }
+    },
+    {
+        $group: {
+            _id: null,
+            companynames: { $addToSet: "$companyname" },
+            usernames: { $addToSet: "$username" }
+        }
+    }
+})
+
+
+4.Find the number of problems solved by the user in codekata.
+
+db.codekata.aggregate([
+    {
+        $match: {
+            codekata_status: "solved" // Replace with the appropriate status for solved problems
+        }
+    },
+    {
+        $group: {
+            _id: "$user_id",
+            problemsSolved: { $sum: 1 }
+        }
+    },
+    {
+        $lookup: {
+            from: "users",
+            localField: "_id",
+            foreignField: "user_id",
+            as: "user"
+        }
+    },
+    {
+        $unwind: "$user"
+    },
+    {
+        $project: {
+            username: "$user.username",
+            problemsSolved: 1
+        }
+    }
+])
+
+
+5.Find all the mentors with who has the mentee's count more than 15
+
+
+db.mentors.aggregate([
+    {
+        $match: {
+            mentees:{ $gt:"15"}
+        }
+    }
+])
+
+
+6.Find the number of users who are absent and task is not submitted  between 15 oct-2020 and 31-oct-2020
+
+db.users.aggregate([
+    {
+        $lookup: {
+            from: "Attendence",
+            localField: "user_id",
+            foreignField: "user_id",
+            as: "attendances"
+        }
+    },
+    {
+        $lookup: {
+            from: "Tasks",
+            localField: "user_id",
+            foreignField: "user_id",
+            as: "tasks"
+        }
+    },
+    {
+        $unwind: {
+            path: "$attendances",
+            preserveNullAndEmptyArrays: true
+        }
+    },
+    {
+        $unwind: {
+            path: "$tasks",
+            preserveNullAndEmptyArrays: true
+        }
+    },
+    {
+        $match: {
+            $or: [
+                {
+                    "attendances.attendence_date": {
+                        $gte: "2020-10-15",
+                        $lte: "2020-10-31"
+                    },
+                    "attendances.attendence": "absent"
+                },
+                {
+                    "tasks.task_date": {
+                        $gte: "2020-10-15",
+                        $lte: "2020-10-31"
+                    },
+                    "tasks.taskstatus": { $ne: "submitted" }
+                }
+            ]
+        }
+    },
+    {
+        $group: {
+            _id: null,
+            count: { $sum: 1 }
+        }
+    },
+    {
+        $project: {
+            _id: 0,
+            count: 1
+        }
+    }
+])
+
+
+
+
+
+
+
+
+
+
+  
+ 
